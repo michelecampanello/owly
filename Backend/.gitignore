@@ -1,0 +1,30 @@
+# Dipendenze
+node_modules/
+
+# Segreti: contiene la chiave API, NON va mai committato
+.env
+.env.*
+!.env.example
+
+# Log
+logs/
+*.log
+npm-debug.log*
+
+# Test e coverage
+coverage/
+.vitest-cache/
+
+# Cache e file temporanei
+.cache/
+*.tmp
+*.tsbuildinfo
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
