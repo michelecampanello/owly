@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Owly 🦉</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <header class="search-header">
+        <h1>🦉 Owly: trova il tuo libro!</h1>
+        <p class="subtitle">
+          Scrivi un argomento e scopri tanti libri da leggere 📚
+        </p>
+
+        <form id="search-form" class="search-box">
+          <input
+            type="text"
+            id="category-input"
+            placeholder="Prova: animali, draghi, spazio…"
+            aria-label="Categoria del libro"
+            required
+          />
+          <button type="submit" id="search-btn">🔍 Cerca</button>
+        </form>
+        <div
+          id="suggestions"
+          class="suggestions"
+          aria-label="Idee per cominciare"
+        ></div>
+      </header>
+
+      <main>
+        <div
+          id="status-message"
+          class="status-message"
+          role="status"
+          aria-live="polite"
+        ></div>
+        <section id="results-container" class="results-grid"></section>
+      </main>
+    </div>
+
+    <!-- Finestra con la descrizione completa del libro -->
+    <div id="book-modal" class="modal hidden">
+      <div class="modal-content">
+        <button
+          type="button"
+          id="close-modal"
+          class="close-btn"
+          aria-label="Chiudi"
+        >
+          &times;
+        </button>
+        <h2 id="modal-title"></h2>
+        <p id="modal-authors" class="authors-sub"></p>
+        <hr />
+        <div id="modal-description" class="description-body"></div>
+      </div>
+    </div>
+  </body>
+</html>
