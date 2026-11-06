@@ -1,10 +1,14 @@
-import Anthropic from "@anthropic-ai/sdk";
+import axios from "axios";
+import "dotenv/config"
 
-// Legge ANTHROPIC_API_KEY dall'ambiente: la chiave resta sul server, mai nel browser.
-const client = new Anthropic();
-const MODEL = process.env.CLAUDE_MODEL ?? "claude-haiku-5-5";
+const MODEL = process.env.GROQ_MODEL ?? "qwen/qwen3.8-27b";
 
-// ---------- Cache in memoria (risparmia chiamate e soldi) ----------
+const client = axios.create({
+  baseURL: "https://api.groq.com/openai/v1",
+  timeout: 20_000,
+});
+
+// ---------- Cache in memoria (risparmia chiamate e limiti del piano gratuito) ----------
 const TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_ENTRIES = 500;
 const cache = new Map();
@@ -21,14 +25,37 @@ async function cached(key, producer) {
 
 // ---------- Chiamata al modello che restituisce JSON ----------
 async function askJson({ system, user, maxTokens = 400 }) {
-  const msg = await client.messages.create({
-    model: MODEL,
-    max_tokens: maxTokens,
-    system,
-    messages: [{ role: "user", content: user }],
-  });
+  // La chiave si legge al momento della chiamata: se manca, l'errore è chiaro
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error("Manca GROQ_API_KEY nell'ambiente");
 
-  const text = msg.content.find((block) => block.type === "text")?.text ?? "";
+  let data;
+  try {
+    ({ data } = await client.post(
+      "/chat/completions",
+      {
+        model: MODEL,
+        max_completion_tokens: maxTokens,
+        temperature: 0, // risposte stabili: è un filtro, non un testo creativo
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      },
+      { headers: { Authorization: `Bearer ${apiKey}` } },
+    ));
+  } catch (error) {
+    // Un AxiosError contiene la configurazione della richiesta, cioè anche la chiave API:
+    // lo sostituiamo con un errore pulito, così non finisce mai nei log.
+    if (axios.isAxiosError(error)) {
+      const detail = error.response?.data?.error?.message ?? error.message;
+      throw new Error(`Groq: ${error.response?.status ?? error.code} - ${detail}`);
+    }
+    throw error;
+  }
+
+  const text = data?.choices?.[0]?.message?.content ?? "";
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("La risposta dell'AI non è in formato JSON");
   return JSON.parse(match[0]);

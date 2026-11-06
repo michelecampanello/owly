@@ -4,7 +4,7 @@ import { createApp } from "../src/app.js";
 import { categoryToSubject, kidDescription } from "../src/ai.js";
 
 // Le funzioni AI sono finte: qui si testano solo le rotte.
-vi.mock("../ai.js", () => ({
+vi.mock("../src/ai.js", () => ({
   categoryToSubject: vi.fn(),
   kidDescription: vi.fn(),
 }));

@@ -21,20 +21,17 @@ export const FIXTURE = `
 
 export const $ = (id) => document.getElementById(id);
 
-// Risposte finte di fetch
-export const ok = (data) => ({ ok: true, status: 200, json: async () => data });
-export const httpError = (status = 500) => ({
-  ok: false,
-  status,
-  json: async () => ({}),
-});
+// Errore come quello che axios lancia quando una richiesta viene annullata
+export const canceledError = () =>
+  Object.assign(new Error("canceled"), {
+    name: "CanceledError",
+    code: "ERR_CANCELED",
+  });
 
-// Una richiesta che resta in attesa e fallisce con AbortError quando viene annullata
+// Una richiesta che resta in attesa e fallisce come "annullata" quando parte l'abort
 export function abortable(signal) {
   return new Promise((_resolve, reject) => {
-    signal.addEventListener("abort", () =>
-      reject(new DOMException("Aborted", "AbortError")),
-    );
+    signal.addEventListener("abort", () => reject(canceledError()));
   });
 }
 

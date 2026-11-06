@@ -1,14 +1,11 @@
-import { fetchBooks, fetchDescription } from "./api.js";
+import { isEmpty, upperFirst } from "lodash-es";
+import { fetchBooks, fetchDescription, isCancel } from "./api.js";
 import { MESSAGES } from "./messages.js";
 import { renderSuggestions } from "./suggestions.js";
 import { renderBooks, formatAuthors } from "./books.js";
 import { createModal } from "./modal.js";
 
-const isAbort = (error) => error?.name === "AbortError";
-
 export function initApp(els) {
-  // Una nuova richiesta annulla quella precedente: niente risposte "vecchie"
-  // che arrivano in ritardo e sovrascrivono quelle nuove.
   let searchController = null;
   let detailController = null;
 
@@ -43,20 +40,20 @@ export function initApp(els) {
       }
       showBooks(data, displayName);
     } catch (error) {
-      if (isAbort(error)) return;
+      if (isCancel(error)) return;
       console.error("Errore durante il recupero dei libri:", error);
       setStatus(MESSAGES.searchError);
     }
   }
 
   function showBooks({ works, language }, displayName) {
-    if (!works || works.length === 0) {
+    if (isEmpty(works)) {
       setStatus(MESSAGES.noResults);
       return;
     }
 
     const mixed = language === "any" ? ` ${MESSAGES.mixedLanguage}` : "";
-    setStatus(MESSAGES.found(works.length, displayName) + mixed);
+    setStatus(MESSAGES.found(works.length, upperFirst(displayName)) + mixed);
     renderBooks(els.resultsContainer, works, openBook);
   }
 
@@ -77,7 +74,7 @@ export function initApp(els) {
       const data = await fetchDescription(book.key, { signal });
       modal.setDescription(data.description ?? MESSAGES.noDescription);
     } catch (error) {
-      if (isAbort(error)) return;
+      if (isCancel(error)) return;
       console.error("Errore durante il recupero del dettaglio:", error);
       modal.setDescription(MESSAGES.descriptionError);
     }

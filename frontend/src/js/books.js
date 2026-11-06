@@ -1,9 +1,11 @@
+import { compact, isEmpty, map, truncate } from "lodash-es";
 import { MESSAGES } from "./messages.js";
 
+const MAX_TITLE_LENGTH = 90;
+
 export function formatAuthors(book) {
-  return book.authors?.length
-    ? book.authors.map((a) => a.name).join(", ")
-    : MESSAGES.unknownAuthor;
+  const names = compact(map(book.authors, "name"));
+  return isEmpty(names) ? MESSAGES.unknownAuthor : names.join(", ");
 }
 
 function createBookCard(book, onOpen) {
@@ -13,10 +15,11 @@ function createBookCard(book, onOpen) {
   card.tabIndex = 0;
   card.setAttribute("role", "button");
 
-  // textContent al posto di innerHTML: il testo non viene mai letto come HTML
+  const fullTitle = book.title ?? MESSAGES.untitledBook;
   const title = document.createElement("h2");
   title.className = "book-title";
-  title.textContent = `📖 ${book.title ?? MESSAGES.untitledBook}`;
+  title.textContent = `📖 ${truncate(fullTitle, { length: MAX_TITLE_LENGTH, separator: " " })}`;
+  title.title = fullTitle;
 
   const authors = document.createElement("p");
   authors.className = "book-authors";
@@ -37,5 +40,7 @@ function createBookCard(book, onOpen) {
 }
 
 export function renderBooks(container, works, onOpen) {
-  container.replaceChildren(...works.map((book) => createBookCard(book, onOpen)));
+  container.replaceChildren(
+    ...works.map((book) => createBookCard(book, onOpen)),
+  );
 }
