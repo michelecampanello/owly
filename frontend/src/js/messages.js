@@ -7,6 +7,12 @@ export const MESSAGES = {
   noResults:
     "🤔 Non ho trovato nessun libro. Prova con un'altra parola, per esempio “animali”!",
   blocked: "🙈 Proviamo con un altro argomento!",
+  // Owly ha scartato tutti i libri della ricerca perché non adatti ai bambini
+  noKidBooks:
+    "🙈 Su questo argomento non ho trovato libri adatti a te. Prova con un'altra parola!",
+  // ...oppure solo quelli di questa pagina, ma ce ne sono altre
+  noKidBooksOnPage: (page, totalPages) =>
+    `🙈 In questa pagina non ci sono libri adatti a te. 📄 Pagina ${page} di ${totalPages}: prova un'altra pagina!`,
   found: (count, topic) =>
     `🎉 Ho trovato ${count} libri su “${topic}”! Tocca un libro per saperne di più.`,
   pageOf: (page, totalPages) => `📄 Pagina ${page} di ${totalPages}`,

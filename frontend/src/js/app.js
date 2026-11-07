@@ -69,10 +69,19 @@ export function initApp(els) {
     els.statusMessage.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }
 
-  function showBooks({ works, language, page = 1, totalPages = 1, total }, displayName) {
+  function showBooks(
+    { works, language, page = 1, totalPages = 1, total, filtered = 0 },
+    displayName,
+  ) {
     if (isEmpty(works)) {
       els.resultsContainer.replaceChildren();
-      setStatus(MESSAGES.noResults);
+      if (totalPages > 1) {
+        // Pagina vuota (libri scartati dal filtro), ma ci sono altre pagine da provare
+        setStatus(MESSAGES.noKidBooksOnPage(page, totalPages));
+        renderPagination(els.pagination, { page, totalPages }, goToPage);
+      } else {
+        setStatus(filtered > 0 ? MESSAGES.noKidBooks : MESSAGES.noResults);
+      }
       return;
     }
 

@@ -1,6 +1,6 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
-import { categoryToSubject, kidDescription, translateTitles } from "./ai.js";
+import { categoryToSubject, kidDescription, reviewBooks } from "./ai.js";
 
 const OPEN_LIBRARY = "https://openlibrary.org";
 
@@ -17,23 +17,28 @@ async function getJson(url) {
 // Il frontend ricostruisce l'URL dell'immagine da questo numero.
 const toCoverId = (id) => (Number.isInteger(id) && id > 0 ? id : null);
 
-// Stesso formato che il frontend già conosce: { key, title, coverId, authors: [{ name }] }
+// Stesso formato che il frontend già conosce: { key, title, coverId, authors: [{ name }] }.
+// "subjects" (gli argomenti del catalogo) serve solo all'AI per giudicare il libro:
+// viene tolto prima di rispondere.
+const asList = (value) => (Array.isArray(value) ? value : []);
 const fromSearch = (doc) => ({
   key: doc.key,
   title: doc.title,
   coverId: toCoverId(doc.cover_i),
-  authors: (doc.author_name ?? []).map((name) => ({ name })),
+  authors: asList(doc.author_name).map((name) => ({ name })),
+  subjects: asList(doc.subject),
 });
 const fromSubjects = (work) => ({
   key: work.key,
   title: work.title,
   coverId: toCoverId(work.cover_id),
-  authors: (work.authors ?? []).map((a) => ({ name: a.name })),
+  authors: asList(work.authors).map((a) => ({ name: a.name })),
+  subjects: asList(work.subject),
 });
 
 const SERVICE_ERROR = "Servizio non disponibile, riprova tra poco";
 
-// Paginazione: pochi libri per pagina (ogni pagina costa una traduzione dei titoli)
+// Paginazione: pochi libri per pagina (ogni pagina costa una revisione con l'AI)
 // e un numero massimo di pagine, perché oltre un certo punto i risultati sono poco pertinenti.
 export const PAGE_SIZE = 12;
 export const MAX_PAGES = 10;
@@ -48,22 +53,29 @@ function parsePage(raw) {
 const countPages = (total) =>
   Math.min(MAX_PAGES, Math.max(1, Math.ceil(total / PAGE_SIZE)));
 
-// Titoli in italiano. Se il titolo cambia, si conserva anche l'originale.
-// La traduzione è un "di più": se fallisce, la lista resta utilizzabile con i titoli originali.
-async function withItalianTitles(works) {
+// Tiene solo i libri che l'AI giudica adatti ai bambini, con il titolo in italiano
+// (se il titolo cambia, si conserva anche l'originale).
+// Il filtro è una protezione: se l'AI non risponde, l'errore arriva alla rotta (502)
+// e nessun libro viene mostrato senza controllo.
+async function onlyKidBooks(works) {
   if (works.length === 0) return works;
 
-  try {
-    const italian = await translateTitles(works.map((work) => work.title));
-    return works.map((work, i) =>
-      italian[i] && italian[i] !== work.title
-        ? { ...work, title: italian[i], originalTitle: work.title }
-        : work,
-    );
-  } catch (err) {
-    console.error("Traduzione dei titoli non riuscita:", err);
-    return works;
-  }
+  const reviews = await reviewBooks(
+    works.map((work) => ({
+      key: work.key,
+      title: work.title,
+      authors: work.authors.map((a) => a.name),
+      subjects: work.subjects,
+    })),
+  );
+
+  return works.flatMap(({ subjects: _subjects, ...work }, i) => {
+    const review = reviews[i];
+    if (!review?.suitable) return [];
+    return review.title !== work.title
+      ? [{ ...work, title: review.title, originalTitle: work.title }]
+      : [work];
+  });
 }
 
 // Factory: ogni chiamata crea un'app nuova (con un rate limiter nuovo),
@@ -94,7 +106,7 @@ export function createApp({ rateLimitPerMinute = 30 } = {}) {
       const search = await getJson(
         `${OPEN_LIBRARY}/search.json?subject=${encodeURIComponent(subject)}` +
           `&language=ita&limit=${PAGE_SIZE}&page=${page}` +
-          `&fields=key,title,author_name,cover_i`,
+          `&fields=key,title,author_name,cover_i,subject`,
       );
       let works = (search.docs ?? []).map(fromSearch);
       let total = search.numFound ?? works.length;
@@ -114,7 +126,8 @@ export function createApp({ rateLimitPerMinute = 30 } = {}) {
         language = "any";
       }
 
-      works = await withItalianTitles(works);
+      const found = works.length;
+      works = await onlyKidBooks(works);
 
       res.json({
         subject,
@@ -123,6 +136,7 @@ export function createApp({ rateLimitPerMinute = 30 } = {}) {
         page,
         totalPages: countPages(total),
         total,
+        filtered: found - works.length, // libri scartati perché non adatti
       });
     } catch (err) {
       console.error("Errore /api/books:", err);

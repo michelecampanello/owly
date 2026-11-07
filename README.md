@@ -9,6 +9,7 @@ I libri e le copertine arrivano da [Open Library](https://openlibrary.org).
 Un modello AI (tramite [Groq](https://groq.com)) si occupa di:
 
 - capire l'argomento richiesto, tradurlo in inglese per la ricerca e **bloccare** gli argomenti non adatti ai bambini;
+- controllare ogni libro della lista (titolo, autori e argomenti del catalogo) e **mostrare solo quelli adatti ai bambini**;
 - tradurre in italiano i titoli dei libri (il titolo originale resta visibile);
 - riscrivere la trama in 2-3 frasi semplici, in italiano, e scartare i libri non adatti.
 
@@ -89,6 +90,7 @@ Prima cerca libri in italiano; se non ne trova nessuno, ripiega su libri in qual
   "page": 1,
   "totalPages": 8,
   "total": 93,
+  "filtered": 2,
   "works": [
     {
       "key": "/works/OL123W",
@@ -102,6 +104,12 @@ Prima cerca libri in italiano; se non ne trova nessuno, ripiega su libri in qual
 ```
 
 Se l'argomento non è adatto ai bambini risponde `{ "blocked": true, "works": [] }`.
+
+Ogni pagina viene controllata dall'AI con una sola chiamata, che traduce i titoli e scarta i libri
+non adatti ai bambini dai 6 ai 10 anni. `filtered` dice quanti libri della pagina sono stati scartati,
+quindi una pagina può contenere meno di 12 libri (o nessuno). `total` e `totalPages` vengono da
+Open Library e contano anche i libri che poi saranno scartati.
+Se l'AI non risponde, la ricerca fallisce con `502`: nessun libro viene mostrato senza controllo.
 
 ### `GET /api/description?key=/works/OL123W`
 

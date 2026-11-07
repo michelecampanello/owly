@@ -372,3 +372,37 @@ describe("paginazione", () => {
     expect(document.querySelectorAll(".skeleton-card").length).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------
+describe("libri scartati dal filtro per bambini", () => {
+  it("se la ricerca ha solo libri non adatti lo dice", async () => {
+    fetchBooks.mockResolvedValueOnce({ works: [], filtered: 5, totalPages: 1 });
+    search("draghi");
+    await vi.waitFor(() => expect(status()).toContain("non ho trovato libri adatti"));
+  });
+
+  it("senza libri scartati resta il messaggio di nessun risultato", async () => {
+    fetchBooks.mockResolvedValueOnce({ works: [], filtered: 0 });
+    search("draghi");
+    await vi.waitFor(() => expect(status()).toContain("Non ho trovato nessun libro"));
+  });
+
+  it("se una pagina resta vuota ma ce ne sono altre, mostra comunque i pulsanti", async () => {
+    fetchBooks.mockResolvedValueOnce({
+      works: [],
+      filtered: 12,
+      page: 2,
+      totalPages: 4,
+    });
+    search("draghi");
+
+    await vi.waitFor(() =>
+      expect(status()).toContain("In questa pagina non ci sono libri adatti"),
+    );
+    expect(status()).toContain("Pagina 2 di 4");
+    expect($("pagination").hidden).toBe(false);
+    expect(
+      $("pagination").querySelector('[aria-current="page"]').textContent,
+    ).toBe("2");
+  });
+});

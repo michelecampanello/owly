@@ -1,13 +1,13 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
-import { categoryToSubject, kidDescription, translateTitles } from "../src/ai.js";
+import { categoryToSubject, kidDescription, reviewBooks } from "../src/ai.js";
 
 // Le funzioni AI sono finte: qui si testano solo le rotte.
 vi.mock("../src/ai.js", () => ({
   categoryToSubject: vi.fn(),
   kidDescription: vi.fn(),
-  translateTitles: vi.fn(),
+  reviewBooks: vi.fn(),
 }));
 
 const ok = (data) => ({ ok: true, status: 200, json: async () => data });
@@ -30,7 +30,10 @@ beforeEach(() => {
   errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
   categoryToSubject.mockResolvedValue({ subject: "dragons", safe: true });
-  translateTitles.mockImplementation(async (titles) => titles); // di base: nessuna traduzione
+  // di base: tutti i libri adatti, nessuna traduzione
+  reviewBooks.mockImplementation(async (books) =>
+    books.map((book) => ({ title: book.title, suitable: true })),
+  );
   app = createApp();
 });
 
@@ -95,7 +98,7 @@ describe("GET /api/books", () => {
 
       expect(calledUrl()).toBe(
         "https://openlibrary.org/search.json?subject=science%20fiction" +
-          "&language=ita&limit=12&page=1&fields=key,title,author_name,cover_i",
+          "&language=ita&limit=12&page=1&fields=key,title,author_name,cover_i,subject",
       );
     });
 
@@ -135,6 +138,7 @@ describe("GET /api/books", () => {
         page: 1,
         totalPages: 1,
         total: 2,
+        filtered: 0,
         works: [
           {
             key: "/works/OL1W",
@@ -192,6 +196,7 @@ describe("GET /api/books", () => {
         page: 1,
         totalPages: 1,
         total: 2,
+        filtered: 0,
         works: [
           {
             key: "/works/OL9W",
@@ -223,6 +228,7 @@ describe("GET /api/books", () => {
         page: 1,
         totalPages: 1,
         total: 0,
+        filtered: 0,
       });
     });
   });
@@ -350,21 +356,64 @@ describe("GET /api/books: paginazione", () => {
 });
 
 // ---------------------------------------------------------------
-describe("GET /api/books: titoli in italiano", () => {
+describe("GET /api/books: revisione AI (filtro per bambini e titoli)", () => {
   const get = () =>
     request(app).get("/api/books").query({ category: "draghi" });
   const docs = [
-    { key: "/works/OL1W", title: "The Dragon", author_name: ["Anna Rossi"] },
+    {
+      key: "/works/OL1W",
+      title: "The Dragon",
+      author_name: ["Anna Rossi"],
+      subject: ["Juvenile fiction", "Dragons"],
+    },
     { key: "/works/OL2W", title: "Il gatto" },
+    { key: "/works/OL3W", title: "Dark Tales", subject: ["Horror"] },
   ];
+  const reviewed = (...reviews) => reviewBooks.mockResolvedValue(reviews);
 
-  it("traduce i titoli e conserva quello originale", async () => {
+  it("passa all'AI titolo, autori e argomenti di ogni libro, in ordine", async () => {
     fetchMock.mockResolvedValueOnce(ok({ docs }));
-    translateTitles.mockResolvedValue(["Il drago", "Il gatto"]);
+
+    await get();
+
+    expect(reviewBooks).toHaveBeenCalledTimes(1);
+    expect(reviewBooks).toHaveBeenCalledWith([
+      {
+        key: "/works/OL1W",
+        title: "The Dragon",
+        authors: ["Anna Rossi"],
+        subjects: ["Juvenile fiction", "Dragons"],
+      },
+      { key: "/works/OL2W", title: "Il gatto", authors: [], subjects: [] },
+      { key: "/works/OL3W", title: "Dark Tales", authors: [], subjects: ["Horror"] },
+    ]);
+  });
+
+  it("toglie i libri non adatti e conta quanti ne ha scartati", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs, numFound: 3 }));
+    reviewed(
+      { title: "Il drago", suitable: true },
+      { title: "Il gatto", suitable: true },
+      { title: "Racconti oscuri", suitable: false },
+    );
 
     const res = await get();
 
     expect(res.status).toBe(200);
+    expect(res.body.works.map((w) => w.key)).toEqual(["/works/OL1W", "/works/OL2W"]);
+    expect(res.body.filtered).toBe(1);
+  });
+
+  it("traduce i titoli e conserva quello originale", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs }));
+    reviewed(
+      { title: "Il drago", suitable: true },
+      { title: "Il gatto", suitable: true },
+      { title: "Racconti oscuri", suitable: false },
+    );
+
+    const res = await get();
+
     expect(res.body.works[0]).toEqual({
       key: "/works/OL1W",
       title: "Il drago",
@@ -372,14 +421,7 @@ describe("GET /api/books: titoli in italiano", () => {
       coverId: null,
       authors: [{ name: "Anna Rossi" }],
     });
-  });
-
-  it("non aggiunge originalTitle se il titolo è già in italiano", async () => {
-    fetchMock.mockResolvedValueOnce(ok({ docs }));
-    translateTitles.mockResolvedValue(["Il drago", "Il gatto"]);
-
-    const res = await get();
-
+    // titolo già in italiano: niente originalTitle
     expect(res.body.works[1]).toEqual({
       key: "/works/OL2W",
       title: "Il gatto",
@@ -388,74 +430,94 @@ describe("GET /api/books: titoli in italiano", () => {
     });
   });
 
-  it("passa i titoli alla traduzione nell'ordine della lista", async () => {
+  it("non manda al frontend gli argomenti del catalogo", async () => {
     fetchMock.mockResolvedValueOnce(ok({ docs }));
-
-    await get();
-
-    expect(translateTitles).toHaveBeenCalledTimes(1);
-    expect(translateTitles).toHaveBeenCalledWith(["The Dragon", "Il gatto"]);
+    const res = await get();
+    expect(res.body.works.every((w) => !("subjects" in w))).toBe(true);
   });
 
-  it("traduce anche i titoli del ripiego su altre lingue", async () => {
-    fetchMock.mockResolvedValueOnce(ok({ docs: [] }));
-    fetchMock.mockResolvedValueOnce(
-      ok({ works: [{ key: "/works/OL9W", title: "Dragons", authors: [] }] }),
+  it("se tutti i libri sono scartati restituisce una lista vuota", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs, numFound: 30 }));
+    reviewed(
+      { title: "A", suitable: false },
+      { title: "B", suitable: false },
+      { title: "C", suitable: false },
     );
-    translateTitles.mockResolvedValue(["Draghi"]);
 
     const res = await get();
 
+    expect(res.body).toMatchObject({ works: [], filtered: 3, totalPages: 3 });
+  });
+
+  it("filtra anche i libri del ripiego su altre lingue", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs: [] }));
+    fetchMock.mockResolvedValueOnce(
+      ok({
+        works: [
+          { key: "/works/OL9W", title: "Dragons", subject: ["Picture books"] },
+          { key: "/works/OL8W", title: "War", subject: ["Violence"] },
+        ],
+      }),
+    );
+    reviewed(
+      { title: "Draghi", suitable: true },
+      { title: "Guerra", suitable: false },
+    );
+
+    const res = await get();
+
+    expect(reviewBooks.mock.calls[0][0][0].subjects).toEqual(["Picture books"]);
     expect(res.body.language).toBe("any");
+    expect(res.body.works).toHaveLength(1);
     expect(res.body.works[0]).toMatchObject({
       title: "Draghi",
       originalTitle: "Dragons",
     });
   });
 
-  it("se la traduzione fallisce restituisce comunque i titoli originali", async () => {
+  it("se l'AI fallisce risponde 502: nessun libro passa senza controllo", async () => {
     fetchMock.mockResolvedValueOnce(ok({ docs }));
-    translateTitles.mockRejectedValue(new Error("Groq: 429 - limite"));
+    reviewBooks.mockRejectedValue(new Error("Groq: 429 - limite"));
 
     const res = await get();
 
-    expect(res.status).toBe(200);
-    expect(res.body.works.map((w) => w.title)).toEqual([
-      "The Dragon",
-      "Il gatto",
-    ]);
-    expect(res.body.works[0].originalTitle).toBeUndefined();
+    expect(res.status).toBe(502);
+    expect(res.body).toEqual({ error: SERVICE_ERROR });
     expect(errorSpy).toHaveBeenCalled();
   });
 
-  it("non si rompe se la traduzione restituisce un risultato inatteso", async () => {
+  it("scarta i libri senza giudizio se la risposta è incompleta", async () => {
     fetchMock.mockResolvedValueOnce(ok({ docs }));
-    translateTitles.mockResolvedValue(undefined);
+    reviewed({ title: "Il drago", suitable: true }); // solo il primo
 
     const res = await get();
 
-    expect(res.status).toBe(200);
-    expect(res.body.works.map((w) => w.title)).toEqual([
-      "The Dragon",
-      "Il gatto",
-    ]);
+    expect(res.body.works.map((w) => w.key)).toEqual(["/works/OL1W"]);
   });
 
-  it("non chiama la traduzione se non ci sono libri", async () => {
+  it("ignora un campo subject che non è un elenco", async () => {
+    fetchMock.mockResolvedValueOnce(
+      ok({ docs: [{ key: "/works/OL1W", title: "A", subject: "Horror" }] }),
+    );
+    await get();
+    expect(reviewBooks.mock.calls[0][0][0].subjects).toEqual([]);
+  });
+
+  it("non chiama l'AI se non ci sono libri", async () => {
     fetchMock.mockResolvedValueOnce(ok({ docs: [] }));
     fetchMock.mockResolvedValueOnce(ok({ works: [] }));
 
     await get();
 
-    expect(translateTitles).not.toHaveBeenCalled();
+    expect(reviewBooks).not.toHaveBeenCalled();
   });
 
-  it("non chiama la traduzione per gli argomenti bloccati", async () => {
+  it("non chiama l'AI per gli argomenti bloccati", async () => {
     categoryToSubject.mockResolvedValue({ subject: null, safe: false });
 
     await get();
 
-    expect(translateTitles).not.toHaveBeenCalled();
+    expect(reviewBooks).not.toHaveBeenCalled();
   });
 });
 
@@ -510,7 +572,7 @@ describe("GET /api/books: copertine", () => {
     fetchMock.mockResolvedValueOnce(
       ok({ docs: [{ key: "/works/OL1W", title: "The Dragon", cover_i: 99 }] }),
     );
-    translateTitles.mockResolvedValue(["Il drago"]);
+    reviewBooks.mockResolvedValue([{ title: "Il drago", suitable: true }]);
 
     const res = await get();
 
