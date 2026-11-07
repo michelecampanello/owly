@@ -54,6 +54,17 @@ describe("apertura", () => {
     expect(document.activeElement).toBe($("close-modal"));
   });
 
+  it("setDescription con loading mostra lo spinner, senza lo toglie", () => {
+    openIt();
+    modal.setDescription("Attendi", { loading: true });
+    expect($("modal-description").classList.contains("is-loading")).toBe(true);
+    expect($("modal-description").getAttribute("aria-busy")).toBe("true");
+
+    modal.setDescription("Fatto");
+    expect($("modal-description").classList.contains("is-loading")).toBe(false);
+    expect($("modal-description").getAttribute("aria-busy")).toBe("false");
+  });
+
   it("setDescription scrive il testo come testo semplice", () => {
     openIt();
     modal.setDescription("<img src=x onerror=alert(1)>");

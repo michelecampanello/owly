@@ -20,8 +20,12 @@ export function initApp(els) {
     onClose: () => detailController?.abort(),
   });
 
-  const setStatus = (text) => {
+  // loading: true mostra lo spinner nel messaggio e nel pulsante "Cerca"
+  const setStatus = (text, { loading = false } = {}) => {
     els.statusMessage.textContent = text;
+    els.statusMessage.classList.toggle("is-loading", loading);
+    els.searchButton.classList.toggle("is-loading", loading);
+    els.searchButton.setAttribute("aria-busy", String(loading));
   };
 
   const clearPagination = () =>
@@ -37,7 +41,7 @@ export function initApp(els) {
     renderSkeletons(els.resultsContainer);
     els.resultsContainer.setAttribute("aria-busy", "true");
     clearPagination();
-    setStatus(MESSAGES.searching);
+    setStatus(MESSAGES.searching, { loading: true });
 
     try {
       const data = await fetchBooks(text, { page, signal });
@@ -91,7 +95,7 @@ export function initApp(els) {
       authors: formatAuthors(book),
       opener: card,
     });
-    modal.setDescription(MESSAGES.loadingDescription);
+    modal.setDescription(MESSAGES.loadingDescription, { loading: true });
 
     try {
       const data = await fetchDescription(book.key, { signal });

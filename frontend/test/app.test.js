@@ -93,6 +93,31 @@ describe("ricerca", () => {
     expect(cards()).toHaveLength(0);
   });
 
+  it("durante la ricerca mostra lo spinner nel messaggio e nel pulsante", () => {
+    fetchBooks.mockReturnValueOnce(new Promise(() => {}));
+    search("animali");
+
+    expect($("status-message").classList.contains("is-loading")).toBe(true);
+    expect($("search-btn").classList.contains("is-loading")).toBe(true);
+    expect($("search-btn").getAttribute("aria-busy")).toBe("true");
+  });
+
+  it.each([
+    ["risultati", () => fetchBooks.mockResolvedValueOnce({ works: [book()] })],
+    ["nessun risultato", () => fetchBooks.mockResolvedValueOnce({ works: [] })],
+    ["argomento bloccato", () => fetchBooks.mockResolvedValueOnce({ blocked: true, works: [] })],
+    ["errore", () => { silenceErrors(); fetchBooks.mockRejectedValueOnce(new Error("x")); }],
+  ])("toglie lo spinner a fine ricerca (%s)", async (_label, arrange) => {
+    arrange();
+    search("animali");
+
+    await vi.waitFor(() =>
+      expect($("status-message").classList.contains("is-loading")).toBe(false),
+    );
+    expect($("search-btn").classList.contains("is-loading")).toBe(false);
+    expect($("search-btn").getAttribute("aria-busy")).toBe("false");
+  });
+
   it("mostra le schede e quanti libri ha trovato (con l'iniziale maiuscola)", async () => {
     await showResults([book(), book({ key: "/works/OL2W", title: "Altro" })]);
     expect(status()).toContain("Ho trovato 2 libri su “Draghi”");
@@ -161,7 +186,20 @@ describe("dettaglio del libro", () => {
     expect($("modal-title").textContent).toBe("Il drago gentile");
     expect($("modal-authors").textContent).toContain("Anna Rossi");
     expect($("modal-description").textContent).toContain("Sto leggendo");
+    expect($("modal-description").classList.contains("is-loading")).toBe(true);
     expect(document.activeElement).toBe($("close-modal"));
+  });
+
+  it("toglie lo spinner quando arriva la trama", async () => {
+    await showResults();
+    fetchDescription.mockResolvedValueOnce({ description: "Una bella storia." });
+
+    cards()[0].click();
+
+    await vi.waitFor(() =>
+      expect($("modal-description").textContent).toBe("Una bella storia."),
+    );
+    expect($("modal-description").classList.contains("is-loading")).toBe(false);
   });
 
   it("chiede la descrizione al backend con la chiave del libro", async () => {

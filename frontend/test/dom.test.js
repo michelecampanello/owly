@@ -20,6 +20,7 @@ describe("getElements", () => {
         "modalTitle",
         "pagination",
         "resultsContainer",
+        "searchButton",
         "searchForm",
         "statusMessage",
         "suggestionsContainer",

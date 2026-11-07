@@ -10,6 +10,7 @@ export function getElements(root = document) {
   return {
     searchForm: byId("search-form"),
     categoryInput: byId("category-input"),
+    searchButton: byId("search-btn"),
     resultsContainer: byId("results-container"),
     pagination: byId("pagination"),
     statusMessage: byId("status-message"),

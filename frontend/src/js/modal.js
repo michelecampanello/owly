@@ -26,8 +26,11 @@ export function createModal({
     closeButton.focus();
   }
 
-  function setDescription(text) {
+  // loading: true mostra lo spinner accanto al testo (es. "Sto leggendo la trama...")
+  function setDescription(text, { loading = false } = {}) {
     descriptionEl.textContent = text;
+    descriptionEl.classList.toggle("is-loading", loading);
+    descriptionEl.setAttribute("aria-busy", String(loading));
   }
 
   function close() {
