@@ -11,6 +11,7 @@ export function getElements(root = document) {
     searchForm: byId("search-form"),
     categoryInput: byId("category-input"),
     resultsContainer: byId("results-container"),
+    pagination: byId("pagination"),
     statusMessage: byId("status-message"),
     suggestionsContainer: byId("suggestions"),
     modal: byId("book-modal"),

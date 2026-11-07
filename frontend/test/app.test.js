@@ -272,3 +272,65 @@ describe("dettaglio del libro", () => {
     expect(document.activeElement).toBe(cards()[0]);
   });
 });
+// ---------------------------------------------------------------
+describe("paginazione", () => {
+  const pageButtons = () => [...$("pagination").querySelectorAll("button")];
+  const button = (label) => pageButtons().find((b) => b.textContent === label);
+
+  it("con una sola pagina non mostra i pulsanti", async () => {
+    await showResults([book()], { page: 1, totalPages: 1 });
+    expect(pageButtons()).toHaveLength(0);
+    expect($("pagination").hidden).toBe(true);
+  });
+
+  it("mostra i pulsanti e la pagina corrente", async () => {
+    await showResults([book()], { page: 1, totalPages: 3, total: 30 });
+
+    expect($("pagination").hidden).toBe(false);
+    expect(button("1").getAttribute("aria-current")).toBe("page");
+    expect(button("◀ Indietro").disabled).toBe(true);
+    expect(button("Avanti ▶").disabled).toBe(false);
+    expect(status()).toContain("Ho trovato 30 libri");
+    expect(status()).toContain("Pagina 1 di 3");
+  });
+
+  it("cambiando pagina ripete la stessa ricerca con la nuova pagina", async () => {
+    await showResults([book()], { page: 1, totalPages: 3 });
+
+    fetchBooks.mockResolvedValueOnce({
+      works: [book({ key: "/works/OL5W", title: "Seconda" })],
+      page: 2,
+      totalPages: 3,
+    });
+    button("Avanti ▶").click();
+
+    expect(fetchBooks).toHaveBeenLastCalledWith(
+      "draghi",
+      expect.objectContaining({ page: 2 }),
+    );
+    await vi.waitFor(() =>
+      expect(cards()[0].textContent).toContain("Seconda"),
+    );
+    expect(button("2").getAttribute("aria-current")).toBe("page");
+  });
+
+  it("una nuova ricerca riparte dalla prima pagina", async () => {
+    await showResults([book()], { page: 1, totalPages: 3 });
+    button("3").click();
+    search("animali");
+
+    expect(fetchBooks).toHaveBeenLastCalledWith(
+      "animali",
+      expect.objectContaining({ page: 1 }),
+    );
+  });
+
+  it("durante il caricamento nasconde i pulsanti", async () => {
+    await showResults([book()], { page: 1, totalPages: 3 });
+    fetchBooks.mockReturnValueOnce(new Promise(() => {}));
+    button("2").click();
+
+    expect(pageButtons()).toHaveLength(0);
+    expect(document.querySelectorAll(".skeleton-card").length).toBeGreaterThan(0);
+  });
+});

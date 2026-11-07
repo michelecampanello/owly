@@ -18,6 +18,7 @@ describe("getElements", () => {
         "modalAuthors",
         "modalDescription",
         "modalTitle",
+        "pagination",
         "resultsContainer",
         "searchForm",
         "statusMessage",

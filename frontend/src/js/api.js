@@ -23,9 +23,9 @@ async function get(url, { params, signal } = {}) {
   return data;
 }
 
-// -> { works: [{ key, title, authors: [{ name }] }], language?, blocked? }
-export function fetchBooks(category, { signal } = {}) {
-  return get("/books", { params: { category }, signal });
+// -> { works: [{ key, title, authors: [{ name }] }], page, totalPages, total, language?, blocked? }
+export function fetchBooks(category, { page = 1, signal } = {}) {
+  return get("/books", { params: { category, page }, signal });
 }
 
 // -> { description: string | null }

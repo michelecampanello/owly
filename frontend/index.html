@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;600;700;800&display=swap"
       rel="stylesheet"
     />
 
@@ -17,7 +17,8 @@
   <body>
     <div class="container">
       <header class="search-header">
-        <h1>🦉 Owly: trova il tuo libro!</h1>
+        <div class="mascot" aria-hidden="true">🦉</div>
+        <h1>Owly</h1>
         <p class="subtitle">
           Scrivi un argomento e scopri tanti libri da leggere 📚
         </p>
@@ -46,8 +47,20 @@
           role="status"
           aria-live="polite"
         ></div>
-        <section id="results-container" class="results-grid"></section>
+        <section
+          id="results-container"
+          class="results-grid"
+          aria-label="Libri trovati"
+        ></section>
+        <nav id="pagination" class="pagination" hidden></nav>
       </main>
+
+      <footer class="credits">
+        Libri e copertine da
+        <a href="https://openlibrary.org" target="_blank" rel="noopener"
+          >Open Library</a
+        >
+      </footer>
     </div>
 
     <!-- Finestra con la descrizione completa del libro -->

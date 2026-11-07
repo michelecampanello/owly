@@ -12,6 +12,10 @@ vi.mock("axios", () => ({
   },
 }));
 
+// axios.create viene chiamato una sola volta, quando si importa api.js.
+// Salviamo subito la configurazione: Vitest può azzerare la cronologia dei mock prima dei test.
+const clientConfig = axios.create.mock.calls[0]?.[0];
+
 beforeEach(() => {
   getMock.mockReset();
   getMock.mockResolvedValue({ data: {} });
@@ -19,7 +23,7 @@ beforeEach(() => {
 
 describe("configurazione del client", () => {
   it("usa /api come base e un timeout", () => {
-    expect(axios.create).toHaveBeenCalledWith(
+    expect(clientConfig).toEqual(
       expect.objectContaining({ baseURL: "/api", timeout: expect.any(Number) }),
     );
   });
@@ -34,7 +38,12 @@ describe("fetchBooks", () => {
     await fetchBooks("draghi");
     expect(getMock).toHaveBeenCalledTimes(1);
     expect(getMock.mock.calls[0][0]).toBe("/books");
-    expect(getMock.mock.calls[0][1].params).toEqual({ category: "draghi" });
+    expect(getMock.mock.calls[0][1].params).toEqual({ category: "draghi", page: 1 });
+  });
+
+  it("passa la pagina richiesta", async () => {
+    await fetchBooks("draghi", { page: 3 });
+    expect(getMock.mock.calls[0][1].params).toEqual({ category: "draghi", page: 3 });
   });
 
   it("passa il testo così com'è: la codifica la fa axios", async () => {

@@ -1,16 +1,21 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
-import { categoryToSubject, kidDescription } from "../src/ai.js";
+import { categoryToSubject, kidDescription, translateTitles } from "../src/ai.js";
 
 // Le funzioni AI sono finte: qui si testano solo le rotte.
 vi.mock("../src/ai.js", () => ({
   categoryToSubject: vi.fn(),
   kidDescription: vi.fn(),
+  translateTitles: vi.fn(),
 }));
 
 const ok = (data) => ({ ok: true, status: 200, json: async () => data });
-const httpError = (status = 500) => ({ ok: false, status, json: async () => ({}) });
+const httpError = (status = 500) => ({
+  ok: false,
+  status,
+  json: async () => ({}),
+});
 
 const SERVICE_ERROR = "Servizio non disponibile, riprova tra poco";
 
@@ -25,6 +30,7 @@ beforeEach(() => {
   errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
   categoryToSubject.mockResolvedValue({ subject: "dragons", safe: true });
+  translateTitles.mockImplementation(async (titles) => titles); // di base: nessuna traduzione
   app = createApp();
 });
 
@@ -74,33 +80,47 @@ describe("GET /api/books", () => {
 
   describe("libri in italiano", () => {
     beforeEach(() => {
-      categoryToSubject.mockResolvedValue({ subject: "science fiction", safe: true });
+      categoryToSubject.mockResolvedValue({
+        subject: "science fiction",
+        safe: true,
+      });
     });
 
     it("cerca per argomento codificato, in italiano, 12 risultati", async () => {
-      fetchMock.mockResolvedValueOnce(ok({ docs: [{ key: "/works/OL1W", title: "T" }] }));
+      fetchMock.mockResolvedValueOnce(
+        ok({ docs: [{ key: "/works/OL1W", title: "T" }] }),
+      );
 
       await get("fantascienza");
 
       expect(calledUrl()).toBe(
         "https://openlibrary.org/search.json?subject=science%20fiction" +
-          "&language=ita&limit=12&fields=key,title,author_name",
+          "&language=ita&limit=12&page=1&fields=key,title,author_name,cover_i",
       );
     });
 
     it("si identifica con uno User-Agent", async () => {
-      fetchMock.mockResolvedValueOnce(ok({ docs: [{ key: "/works/OL1W", title: "T" }] }));
+      fetchMock.mockResolvedValueOnce(
+        ok({ docs: [{ key: "/works/OL1W", title: "T" }] }),
+      );
 
       await get("fantascienza");
 
-      expect(fetchMock.mock.calls[0][1].headers["User-Agent"]).toContain("Owly");
+      expect(fetchMock.mock.calls[0][1].headers["User-Agent"]).toContain(
+        "Owly",
+      );
     });
 
     it("converte i risultati nel formato del frontend", async () => {
       fetchMock.mockResolvedValueOnce(
         ok({
           docs: [
-            { key: "/works/OL1W", title: "Il drago", author_name: ["Anna Rossi", "Luca Bianchi"] },
+            {
+              key: "/works/OL1W",
+              title: "Il drago",
+              author_name: ["Anna Rossi", "Luca Bianchi"],
+              cover_i: 12345,
+            },
             { key: "/works/OL2W", title: "Senza autore" },
           ],
         }),
@@ -112,13 +132,22 @@ describe("GET /api/books", () => {
       expect(res.body).toEqual({
         subject: "science fiction",
         language: "it",
+        page: 1,
+        totalPages: 1,
+        total: 2,
         works: [
           {
             key: "/works/OL1W",
             title: "Il drago",
+            coverId: 12345,
             authors: [{ name: "Anna Rossi" }, { name: "Luca Bianchi" }],
           },
-          { key: "/works/OL2W", title: "Senza autore", authors: [] },
+          {
+            key: "/works/OL2W",
+            title: "Senza autore",
+            coverId: null,
+            authors: [],
+          },
         ],
       });
       expect(fetchMock).toHaveBeenCalledTimes(1); // nessun ripiego
@@ -127,7 +156,10 @@ describe("GET /api/books", () => {
 
   describe("ripiego su libri di qualsiasi lingua", () => {
     beforeEach(() => {
-      categoryToSubject.mockResolvedValue({ subject: "science fiction", safe: true });
+      categoryToSubject.mockResolvedValue({
+        subject: "science fiction",
+        safe: true,
+      });
     });
 
     it.each([
@@ -142,6 +174,7 @@ describe("GET /api/books", () => {
               key: "/works/OL9W",
               title: "Dragons",
               authors: [{ name: "J. Smith", key: "/authors/OL1A" }],
+              cover_id: 777,
             },
             { key: "/works/OL8W", title: "No authors" },
           ],
@@ -151,14 +184,27 @@ describe("GET /api/books", () => {
       const res = await get("fantascienza");
 
       expect(calledUrl(1)).toBe(
-        "https://openlibrary.org/subjects/science_fiction.json?limit=12",
+        "https://openlibrary.org/subjects/science_fiction.json?limit=12&offset=0",
       );
       expect(res.body).toEqual({
         subject: "science fiction",
         language: "any",
+        page: 1,
+        totalPages: 1,
+        total: 2,
         works: [
-          { key: "/works/OL9W", title: "Dragons", authors: [{ name: "J. Smith" }] },
-          { key: "/works/OL8W", title: "No authors", authors: [] },
+          {
+            key: "/works/OL9W",
+            title: "Dragons",
+            coverId: 777,
+            authors: [{ name: "J. Smith" }],
+          },
+          {
+            key: "/works/OL8W",
+            title: "No authors",
+            coverId: null,
+            authors: [],
+          },
         ],
       });
     });
@@ -170,7 +216,14 @@ describe("GET /api/books", () => {
       const res = await get("fantascienza");
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ subject: "science fiction", language: "any", works: [] });
+      expect(res.body).toEqual({
+        subject: "science fiction",
+        language: "any",
+        works: [],
+        page: 1,
+        totalPages: 1,
+        total: 0,
+      });
     });
   });
 
@@ -210,12 +263,258 @@ describe("GET /api/books", () => {
     });
 
     it("non rivela dettagli interni nel messaggio d'errore", async () => {
-      categoryToSubject.mockRejectedValue(new Error("chiave sk-ant-segreta non valida"));
+      categoryToSubject.mockRejectedValue(
+        new Error("chiave sk-ant-segreta non valida"),
+      );
 
       const res = await get("draghi");
 
       expect(JSON.stringify(res.body)).not.toContain("sk-ant");
     });
+  });
+});
+
+// ---------------------------------------------------------------
+describe("GET /api/books: paginazione", () => {
+  const get = (query) =>
+    request(app)
+      .get("/api/books")
+      .query({ category: "draghi", ...query });
+  const docs = [{ key: "/works/OL1W", title: "A" }];
+
+  it("chiede a Open Library la pagina richiesta", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs, numFound: 40 }));
+
+    const res = await get({ page: 3 });
+
+    expect(calledUrl()).toContain("&limit=12&page=3&");
+    expect(res.body).toMatchObject({ page: 3, totalPages: 4, total: 40 });
+  });
+
+  it("senza page parte dalla prima pagina", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs, numFound: 1 }));
+
+    const res = await get();
+
+    expect(calledUrl()).toContain("&page=1&");
+    expect(res.body).toMatchObject({ page: 1, totalPages: 1 });
+  });
+
+  it("limita il numero di pagine a MAX_PAGES", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs, numFound: 5000 }));
+
+    const res = await get();
+
+    expect(res.body.totalPages).toBe(10);
+    expect(res.body.total).toBe(5000);
+  });
+
+  it.each([["0"], ["-1"], ["2.5"], ["abc"], ["11"]])(
+    "risponde 400 se la pagina è %j",
+    async (page) => {
+      const res = await get({ page });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: "Pagina non valida" });
+      expect(categoryToSubject).not.toHaveBeenCalled();
+    },
+  );
+
+  it("non passa al ripiego se la pagina è oltre i risultati italiani", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs: [], numFound: 20 }));
+
+    const res = await get({ page: 5 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(res.body).toMatchObject({ language: "it", works: [], totalPages: 2 });
+  });
+
+  it("nel ripiego usa offset e work_count", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs: [], numFound: 0 }));
+    fetchMock.mockResolvedValueOnce(
+      ok({ works: [{ key: "/works/OL9W", title: "B" }], work_count: 30 }),
+    );
+
+    const res = await get({ page: 2 });
+
+    expect(calledUrl(1)).toBe(
+      "https://openlibrary.org/subjects/dragons.json?limit=12&offset=12",
+    );
+    expect(res.body).toMatchObject({
+      language: "any",
+      page: 2,
+      totalPages: 3,
+      total: 30,
+    });
+  });
+});
+
+// ---------------------------------------------------------------
+describe("GET /api/books: titoli in italiano", () => {
+  const get = () =>
+    request(app).get("/api/books").query({ category: "draghi" });
+  const docs = [
+    { key: "/works/OL1W", title: "The Dragon", author_name: ["Anna Rossi"] },
+    { key: "/works/OL2W", title: "Il gatto" },
+  ];
+
+  it("traduce i titoli e conserva quello originale", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs }));
+    translateTitles.mockResolvedValue(["Il drago", "Il gatto"]);
+
+    const res = await get();
+
+    expect(res.status).toBe(200);
+    expect(res.body.works[0]).toEqual({
+      key: "/works/OL1W",
+      title: "Il drago",
+      originalTitle: "The Dragon",
+      coverId: null,
+      authors: [{ name: "Anna Rossi" }],
+    });
+  });
+
+  it("non aggiunge originalTitle se il titolo è già in italiano", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs }));
+    translateTitles.mockResolvedValue(["Il drago", "Il gatto"]);
+
+    const res = await get();
+
+    expect(res.body.works[1]).toEqual({
+      key: "/works/OL2W",
+      title: "Il gatto",
+      coverId: null,
+      authors: [],
+    });
+  });
+
+  it("passa i titoli alla traduzione nell'ordine della lista", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs }));
+
+    await get();
+
+    expect(translateTitles).toHaveBeenCalledTimes(1);
+    expect(translateTitles).toHaveBeenCalledWith(["The Dragon", "Il gatto"]);
+  });
+
+  it("traduce anche i titoli del ripiego su altre lingue", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs: [] }));
+    fetchMock.mockResolvedValueOnce(
+      ok({ works: [{ key: "/works/OL9W", title: "Dragons", authors: [] }] }),
+    );
+    translateTitles.mockResolvedValue(["Draghi"]);
+
+    const res = await get();
+
+    expect(res.body.language).toBe("any");
+    expect(res.body.works[0]).toMatchObject({
+      title: "Draghi",
+      originalTitle: "Dragons",
+    });
+  });
+
+  it("se la traduzione fallisce restituisce comunque i titoli originali", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs }));
+    translateTitles.mockRejectedValue(new Error("Groq: 429 - limite"));
+
+    const res = await get();
+
+    expect(res.status).toBe(200);
+    expect(res.body.works.map((w) => w.title)).toEqual([
+      "The Dragon",
+      "Il gatto",
+    ]);
+    expect(res.body.works[0].originalTitle).toBeUndefined();
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it("non si rompe se la traduzione restituisce un risultato inatteso", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs }));
+    translateTitles.mockResolvedValue(undefined);
+
+    const res = await get();
+
+    expect(res.status).toBe(200);
+    expect(res.body.works.map((w) => w.title)).toEqual([
+      "The Dragon",
+      "Il gatto",
+    ]);
+  });
+
+  it("non chiama la traduzione se non ci sono libri", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs: [] }));
+    fetchMock.mockResolvedValueOnce(ok({ works: [] }));
+
+    await get();
+
+    expect(translateTitles).not.toHaveBeenCalled();
+  });
+
+  it("non chiama la traduzione per gli argomenti bloccati", async () => {
+    categoryToSubject.mockResolvedValue({ subject: null, safe: false });
+
+    await get();
+
+    expect(translateTitles).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------
+describe("GET /api/books: copertine", () => {
+  const get = () =>
+    request(app).get("/api/books").query({ category: "draghi" });
+  const coverIds = (res) => res.body.works.map((w) => w.coverId);
+
+  it("restituisce coverId a partire da cover_i (ricerca)", async () => {
+    fetchMock.mockResolvedValueOnce(
+      ok({ docs: [{ key: "/works/OL1W", title: "A", cover_i: 240727 }] }),
+    );
+    expect(coverIds(await get())).toEqual([240727]);
+  });
+
+  it("restituisce coverId a partire da cover_id (ripiego)", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs: [] }));
+    fetchMock.mockResolvedValueOnce(
+      ok({ works: [{ key: "/works/OL1W", title: "A", cover_id: 555 }] }),
+    );
+    expect(coverIds(await get())).toEqual([555]);
+  });
+
+  it.each([
+    ["manca", undefined],
+    ["è null", null],
+    ["è zero", 0],
+    ["è negativo", -4],
+    ["è decimale", 1.5],
+    ["è una stringa", "240727"],
+    ["è una stringa pericolosa", "1/../../x"],
+    ["è un oggetto", { id: 1 }],
+  ])("coverId è null se cover_i %s", async (_label, cover_i) => {
+    fetchMock.mockResolvedValueOnce(
+      ok({ docs: [{ key: "/works/OL1W", title: "A", cover_i }] }),
+    );
+    expect(coverIds(await get())).toEqual([null]);
+  });
+
+  it("chiede a Open Library il campo cover_i", async () => {
+    fetchMock.mockResolvedValueOnce(
+      ok({ docs: [{ key: "/works/OL1W", title: "A" }] }),
+    );
+    await get();
+    expect(fetchMock.mock.calls[0][0]).toContain(
+      "fields=key,title,author_name,cover_i",
+    );
+  });
+
+  it("la traduzione dei titoli non fa perdere la copertina", async () => {
+    fetchMock.mockResolvedValueOnce(
+      ok({ docs: [{ key: "/works/OL1W", title: "The Dragon", cover_i: 99 }] }),
+    );
+    translateTitles.mockResolvedValue(["Il drago"]);
+
+    const res = await get();
+
+    expect(res.body.works[0]).toMatchObject({ title: "Il drago", coverId: 99 });
   });
 });
 
@@ -245,7 +544,10 @@ describe("GET /api/description", () => {
 
   describe("descrizione", () => {
     beforeEach(() => {
-      kidDescription.mockResolvedValue({ text: "Un drago gentile.", suitable: true });
+      kidDescription.mockResolvedValue({
+        text: "Un drago gentile.",
+        suitable: true,
+      });
     });
 
     it("scarica l'opera da Open Library e restituisce il testo semplificato", async () => {
@@ -262,17 +564,27 @@ describe("GET /api/description", () => {
         "A friendly dragon.",
       );
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ description: "Un drago gentile.", suitable: true });
+      expect(res.body).toEqual({
+        description: "Un drago gentile.",
+        suitable: true,
+      });
     });
 
     it("legge la descrizione anche quando è un oggetto {value}", async () => {
       fetchMock.mockResolvedValueOnce(
-        ok({ title: "Il drago", description: { type: "/type/text", value: "In oggetto." } }),
+        ok({
+          title: "Il drago",
+          description: { type: "/type/text", value: "In oggetto." },
+        }),
       );
 
       await get("/works/OL1W");
 
-      expect(kidDescription).toHaveBeenCalledWith("/works/OL1W", "Il drago", "In oggetto.");
+      expect(kidDescription).toHaveBeenCalledWith(
+        "/works/OL1W",
+        "Il drago",
+        "In oggetto.",
+      );
     });
 
     it("usa un titolo vuoto se l'opera non ha titolo", async () => {
@@ -287,19 +599,27 @@ describe("GET /api/description", () => {
       ["manca", {}],
       ["è vuota", { description: "" }],
       ["è un oggetto senza value", { description: { type: "/type/text" } }],
-    ])("restituisce description:null se %s, senza usare l'AI", async (_label, data) => {
-      fetchMock.mockResolvedValueOnce(ok(data));
+    ])(
+      "restituisce description:null se %s, senza usare l'AI",
+      async (_label, data) => {
+        fetchMock.mockResolvedValueOnce(ok(data));
 
-      const res = await get("/works/OL1W");
+        const res = await get("/works/OL1W");
 
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual({ description: null });
-      expect(kidDescription).not.toHaveBeenCalled();
-    });
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ description: null });
+        expect(kidDescription).not.toHaveBeenCalled();
+      },
+    );
 
     it("nasconde il testo se il libro non è adatto ai bambini", async () => {
-      kidDescription.mockResolvedValue({ text: "Storia per adulti.", suitable: false });
-      fetchMock.mockResolvedValueOnce(ok({ title: "T", description: "Adult story." }));
+      kidDescription.mockResolvedValue({
+        text: "Storia per adulti.",
+        suitable: false,
+      });
+      fetchMock.mockResolvedValueOnce(
+        ok({ title: "T", description: "Adult story." }),
+      );
 
       const res = await get("/works/OL1W");
 
@@ -319,7 +639,9 @@ describe("GET /api/description", () => {
     });
 
     it("risponde 502 se l'AI fallisce", async () => {
-      fetchMock.mockResolvedValueOnce(ok({ title: "T", description: "Testo." }));
+      fetchMock.mockResolvedValueOnce(
+        ok({ title: "T", description: "Testo." }),
+      );
       kidDescription.mockRejectedValue(new Error("API giù"));
 
       const res = await get("/works/OL1W");
@@ -340,7 +662,8 @@ describe("GET /api/description", () => {
 describe("rate limit", () => {
   it("blocca con 429 le richieste oltre il limite", async () => {
     const limited = createApp({ rateLimitPerMinute: 2 });
-    const hit = () => request(limited).get("/api/description").query({ key: "x" });
+    const hit = () =>
+      request(limited).get("/api/description").query({ key: "x" });
 
     expect((await hit()).status).toBe(400); // 1ª: arriva alla rotta
     expect((await hit()).status).toBe(400); // 2ª: arriva alla rotta
@@ -351,7 +674,9 @@ describe("rate limit", () => {
     const limited = createApp({ rateLimitPerMinute: 1 });
 
     await request(limited).get("/api/books"); // 400, ma conta
-    const res = await request(limited).get("/api/description").query({ key: "x" });
+    const res = await request(limited)
+      .get("/api/description")
+      .query({ key: "x" });
 
     expect(res.status).toBe(429);
   });

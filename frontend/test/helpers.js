@@ -9,6 +9,7 @@ export const FIXTURE = `
   <div id="suggestions"></div>
   <div id="status-message"></div>
   <section id="results-container"></section>
+  <nav id="pagination" hidden></nav>
   <div id="book-modal" class="modal hidden">
     <div class="modal-content">
       <button type="button" id="close-modal">&times;</button>
