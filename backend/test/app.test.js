@@ -743,6 +743,16 @@ describe("rate limit", () => {
     expect(res.status).toBe(429);
   });
 
+  it("dietro al proxy conta ogni client separatamente", async () => {
+    const limited = createApp({ rateLimitPerMinute: 1 });
+    const hit = (ip) =>
+      request(limited).get("/api/books").set("X-Forwarded-For", ip);
+
+    expect((await hit("203.0.113.1")).status).toBe(400);
+    expect((await hit("203.0.113.1")).status).toBe(429);
+    expect((await hit("203.0.113.2")).status).toBe(400);
+  });
+
   it("ogni app creata ha il suo contatore", async () => {
     const first = createApp({ rateLimitPerMinute: 1 });
     await request(first).get("/api/books");

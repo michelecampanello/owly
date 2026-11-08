@@ -83,6 +83,8 @@ async function onlyKidBooks(works) {
 export function createApp({ rateLimitPerMinute = 30 } = {}) {
   const app = express();
 
+  app.set("trust proxy", 1);
+
   // Limita le richieste (ogni ricerca può costare una chiamata all'AI)
   app.use("/api", rateLimit({ windowMs: 60_000, limit: rateLimitPerMinute }));
 
