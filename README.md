@@ -52,8 +52,6 @@ GROQ_MODEL=qwen/qwen3.8-27b   # modello Groq da usare (questo è il predefinito)
 PORT=3000                     # porta del backend
 ```
 
-> Il file `.env` contiene la chiave segreta: è già escluso da git, non condividerlo.
-
 ## Avvio in sviluppo
 
 Servono due terminali:
@@ -142,5 +140,6 @@ npm run build     # crea frontend/dist
 npm run preview   # anteprima locale della build
 ```
 
-In produzione, `frontend/dist` va servito in modo che le richieste a `/api` arrivino al backend
-(per esempio con un reverse proxy).
+## Deploy
+
+[https://owly-rho.vercel.app/](https://owly-rho.vercel.app/)
