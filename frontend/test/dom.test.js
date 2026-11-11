@@ -12,6 +12,7 @@ describe("getElements", () => {
     const els = getElements();
     expect(Object.keys(els).sort()).toEqual(
       [
+        "aiNotice",
         "categoryInput",
         "closeModalBtn",
         "modal",
@@ -19,6 +20,7 @@ describe("getElements", () => {
         "modalDescription",
         "modalTitle",
         "pagination",
+        "rawToggle",
         "resultsContainer",
         "searchButton",
         "searchForm",

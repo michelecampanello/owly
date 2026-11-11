@@ -721,6 +721,90 @@ describe("GET /api/description", () => {
 });
 
 // ---------------------------------------------------------------
+describe("modalità raw (dati originali, senza rielaborazione)", () => {
+  const doc = { key: "/works/OL1W", title: "The Dragon", author_name: ["Anna Rossi"] };
+
+  it("/api/books con raw=1 lascia il titolo originale", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs: [doc], numFound: 1 }));
+    reviewBooks.mockResolvedValue([{ title: "Il drago", suitable: true }]);
+
+    const res = await request(app)
+      .get("/api/books")
+      .query({ category: "draghi", raw: "1" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.works).toEqual([
+      {
+        key: "/works/OL1W",
+        title: "The Dragon",
+        coverId: null,
+        authors: [{ name: "Anna Rossi" }],
+      },
+    ]);
+  });
+
+  it("/api/books con raw=1 tiene comunque il filtro per bambini", async () => {
+    fetchMock.mockResolvedValueOnce(ok({ docs: [doc], numFound: 1 }));
+    reviewBooks.mockResolvedValue([{ title: "Il drago", suitable: false }]);
+
+    const res = await request(app)
+      .get("/api/books")
+      .query({ category: "draghi", raw: "1" });
+
+    expect(res.body.works).toEqual([]);
+    expect(res.body.filtered).toBe(1);
+  });
+
+  it("/api/books con raw=1 blocca comunque le ricerche non adatte", async () => {
+    categoryToSubject.mockResolvedValue({ subject: null, safe: false });
+
+    const res = await request(app)
+      .get("/api/books")
+      .query({ category: "cose brutte", raw: "1" });
+
+    expect(res.body).toEqual({ blocked: true, works: [] });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["0", "no", ""])("raw=%s non attiva la modalità originale", async (raw) => {
+    fetchMock.mockResolvedValueOnce(ok({ docs: [doc], numFound: 1 }));
+    reviewBooks.mockResolvedValue([{ title: "Il drago", suitable: true }]);
+
+    const res = await request(app)
+      .get("/api/books")
+      .query({ category: "draghi", raw });
+
+    expect(res.body.works[0].title).toBe("Il drago");
+  });
+
+  it("/api/description con raw=1 restituisce la trama originale", async () => {
+    fetchMock.mockResolvedValueOnce(
+      ok({ title: "The Dragon", description: "A friendly dragon." }),
+    );
+    kidDescription.mockResolvedValue({ text: "Un drago gentile.", suitable: true });
+
+    const res = await request(app)
+      .get("/api/description")
+      .query({ key: "/works/OL1W", raw: "1" });
+
+    expect(res.body).toEqual({ description: "A friendly dragon.", suitable: true });
+  });
+
+  it("/api/description con raw=1 nasconde comunque le trame non adatte", async () => {
+    fetchMock.mockResolvedValueOnce(
+      ok({ title: "T", description: "Adult story." }),
+    );
+    kidDescription.mockResolvedValue({ text: "Per adulti.", suitable: false });
+
+    const res = await request(app)
+      .get("/api/description")
+      .query({ key: "/works/OL1W", raw: "1" });
+
+    expect(res.body).toEqual({ description: null, suitable: false });
+  });
+});
+
+// ---------------------------------------------------------------
 describe("rate limit", () => {
   it("blocca con 429 le richieste oltre il limite", async () => {
     const limited = createApp({ rateLimitPerMinute: 2 });

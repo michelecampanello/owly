@@ -16,9 +16,16 @@ export const MESSAGES = {
   found: (count, topic) =>
     `🎉 Ho trovato ${count} libri su “${topic}”! Tocca un libro per saperne di più.`,
   pageOf: (page, totalPages) => `📄 Pagina ${page} di ${totalPages}`,
+  // Owly salta da sola le pagine rimaste vuote dopo il filtro
+  searchingPage: (page) => `Cerco libri adatti a te nella pagina ${page}...`,
+  skippedPages: (skipped, page) =>
+    skipped.length === 1
+      ? `🦉 Nella pagina ${skipped[0]} non c'erano libri adatti a te: ti mostro la ${page}.`
+      : `🦉 Nelle pagine ${skipped.slice(0, -1).join(", ")} e ${skipped.at(-1)} non c'erano libri adatti a te: ti mostro la ${page}.`,
   pagination: "Pagine dei risultati",
-  previousPage: "◀ Indietro",
-  nextPage: "Avanti ▶",
+  // Le frecce ◀ ▶ le aggiunge pagination.js
+  previousPage: "Indietro",
+  nextPage: "Avanti",
   goToPage: (page) => `Vai alla pagina ${page}`,
   mixedLanguage: "⚠️ Alcuni libri potrebbero essere in un'altra lingua.",
 
@@ -30,4 +37,10 @@ export const MESSAGES = {
     "🤷 Per questo libro non c'è ancora una descrizione. Chiedi aiuto a un adulto o in biblioteca!",
   descriptionError:
     "😕 Oops! Non riesco a caricare la trama. Riprova tra un attimo!",
+
+  // Riga sotto la ricerca: dice da dove vengono titoli e trame
+  aiNotice:
+    "✨ Titoli e trame sono rielaborati automaticamente dall'intelligenza artificiale e possono contenere imprecisioni.",
+  rawNotice:
+    "📄 Stai vedendo titoli e trame originali di Open Library, senza rielaborazione (spesso in inglese).",
 };

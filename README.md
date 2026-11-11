@@ -13,6 +13,12 @@ Un modello AI (tramite [Groq](https://groq.com)) si occupa di:
 - tradurre in italiano i titoli dei libri (il titolo originale resta visibile);
 - riscrivere la trama in 2-3 frasi semplici, in italiano, e scartare i libri non adatti.
 
+Se il filtro scarta tutti i libri di una pagina, Owly passa da sola alla pagina successiva
+(o alla precedente, se si stava tornando indietro), fino a 3 pagine per volta.
+
+La ricerca resta nell'indirizzo della pagina, per esempio `/?q=draghi&page=2&raw=1`:
+il tasto "indietro" del browser funziona e un link condiviso riapre gli stessi risultati.
+
 ## Struttura del progetto
 
 ```
@@ -114,6 +120,14 @@ Se l'AI non risponde, la ricerca fallisce con `502`: nessun libro viene mostrato
 Restituisce la trama semplificata in italiano:
 `{ "description": "…", "suitable": true }`.
 Se il libro non ha una descrizione, o non è adatto, `description` è `null`.
+
+### Dati originali: `raw=1`
+
+Entrambe le rotte accettano `raw=1` (o `raw=true`) per ricevere titoli e trame così come sono su
+Open Library, senza la rielaborazione dell'AI: niente `originalTitle` e la trama originale al posto
+di quella semplificata. Il filtro per bambini resta attivo: ricerche e libri non adatti vengono
+bloccati come sempre, quindi l'AI viene comunque interpellata per il giudizio.
+Nell'interfaccia corrisponde all'interruttore "Mostra titoli e trame originali".
 
 ### Errori e limiti
 

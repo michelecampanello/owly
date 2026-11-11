@@ -7,6 +7,8 @@ export const FIXTURE = `
     <button type="submit" id="search-btn">Cerca</button>
   </form>
   <div id="suggestions"></div>
+  <input type="checkbox" id="raw-toggle" />
+  <p id="ai-notice"></p>
   <div id="status-message"></div>
   <section id="results-container"></section>
   <nav id="pagination" hidden></nav>

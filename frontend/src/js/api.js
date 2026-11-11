@@ -23,12 +23,22 @@ async function get(url, { params, signal } = {}) {
   return data;
 }
 
+// raw: true chiede titoli e trame originali di Open Library, senza la rielaborazione dell'AI
+// (il filtro per bambini resta attivo). Il parametro viene inviato solo quando serve.
+const rawParam = (raw) => (raw ? { raw: 1 } : {});
+
 // -> { works: [{ key, title, authors: [{ name }] }], page, totalPages, total, language?, blocked? }
-export function fetchBooks(category, { page = 1, signal } = {}) {
-  return get("/books", { params: { category, page }, signal });
+export function fetchBooks(category, { page = 1, raw = false, signal } = {}) {
+  return get("/books", {
+    params: { category, page, ...rawParam(raw) },
+    signal,
+  });
 }
 
 // -> { description: string | null }
-export function fetchDescription(workKey, { signal } = {}) {
-  return get("/description", { params: { key: workKey }, signal });
+export function fetchDescription(workKey, { raw = false, signal } = {}) {
+  return get("/description", {
+    params: { key: workKey, ...rawParam(raw) },
+    signal,
+  });
 }

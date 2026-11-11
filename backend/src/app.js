@@ -50,14 +50,18 @@ function parsePage(raw) {
   return Number.isInteger(page) && page >= 1 && page <= MAX_PAGES ? page : null;
 }
 
+// ?raw=1: titoli e trame come li dà Open Library, senza la rielaborazione dell'AI.
+// Il filtro per bambini resta attivo anche in questo caso.
+const parseRaw = (value) => value === "1" || value === "true";
+
 const countPages = (total) =>
   Math.min(MAX_PAGES, Math.max(1, Math.ceil(total / PAGE_SIZE)));
 
 // Tiene solo i libri che l'AI giudica adatti ai bambini, con il titolo in italiano
-// (se il titolo cambia, si conserva anche l'originale).
+// (se il titolo cambia, si conserva anche l'originale). Con raw il titolo resta quello originale.
 // Il filtro è una protezione: se l'AI non risponde, l'errore arriva alla rotta (502)
 // e nessun libro viene mostrato senza controllo.
-async function onlyKidBooks(works) {
+async function onlyKidBooks(works, { raw = false } = {}) {
   if (works.length === 0) return works;
 
   const reviews = await reviewBooks(
@@ -72,7 +76,7 @@ async function onlyKidBooks(works) {
   return works.flatMap(({ subjects: _subjects, ...work }, i) => {
     const review = reviews[i];
     if (!review?.suitable) return [];
-    return review.title !== work.title
+    return !raw && review.title !== work.title
       ? [{ ...work, title: review.title, originalTitle: work.title }]
       : [work];
   });
@@ -88,7 +92,7 @@ export function createApp({ rateLimitPerMinute = 30 } = {}) {
   // Limita le richieste (ogni ricerca può costare una chiamata all'AI)
   app.use("/api", rateLimit({ windowMs: 60_000, limit: rateLimitPerMinute }));
 
-  // GET /api/books?category=draghi&page=2
+  // GET /api/books?category=draghi&page=2[&raw=1]
   app.get("/api/books", async (req, res) => {
     const category = String(req.query.category ?? "")
       .trim()
@@ -99,6 +103,7 @@ export function createApp({ rateLimitPerMinute = 30 } = {}) {
     if (page === null) {
       return res.status(400).json({ error: "Pagina non valida" });
     }
+    const raw = parseRaw(req.query.raw);
 
     try {
       const { subject, safe } = await categoryToSubject(category);
@@ -129,7 +134,7 @@ export function createApp({ rateLimitPerMinute = 30 } = {}) {
       }
 
       const found = works.length;
-      works = await onlyKidBooks(works);
+      works = await onlyKidBooks(works, { raw });
 
       res.json({
         subject,
@@ -146,12 +151,13 @@ export function createApp({ rateLimitPerMinute = 30 } = {}) {
     }
   });
 
-  // GET /api/description?key=/works/OL8193508W
+  // GET /api/description?key=/works/OL8193508W[&raw=1]
   app.get("/api/description", async (req, res) => {
     const key = String(req.query.key ?? "");
     if (!/^\/works\/OL\d+W$/.test(key)) {
       return res.status(400).json({ error: "Chiave non valida" });
     }
+    const raw = parseRaw(req.query.raw);
 
     try {
       const data = await getJson(`${OPEN_LIBRARY}${key}.json`);
@@ -162,12 +168,15 @@ export function createApp({ rateLimitPerMinute = 30 } = {}) {
 
       if (!original) return res.json({ description: null });
 
+      // Anche con raw serve il giudizio dell'AI: è lei a dire se la trama è adatta.
+      // La risposta è in cache per chiave, quindi passare da una modalità all'altra non costa nulla.
       const { text, suitable } = await kidDescription(
         key,
         data.title ?? "",
         original,
       );
-      res.json({ description: suitable ? text : null, suitable });
+      const description = raw ? original : text;
+      res.json({ description: suitable ? description : null, suitable });
     } catch (err) {
       console.error("Errore /api/description:", err);
       res.status(502).json({ error: SERVICE_ERROR });

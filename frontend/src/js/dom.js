@@ -15,6 +15,8 @@ export function getElements(root = document) {
     pagination: byId("pagination"),
     statusMessage: byId("status-message"),
     suggestionsContainer: byId("suggestions"),
+    rawToggle: byId("raw-toggle"),
+    aiNotice: byId("ai-notice"),
     modal: byId("book-modal"),
     modalTitle: byId("modal-title"),
     modalAuthors: byId("modal-authors"),

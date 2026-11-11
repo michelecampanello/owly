@@ -46,6 +46,18 @@ describe("fetchBooks", () => {
     expect(getMock.mock.calls[0][1].params).toEqual({ category: "draghi", page: 3 });
   });
 
+  it("con raw chiede i dati originali, senza raw non manda il parametro", async () => {
+    await fetchBooks("draghi", { raw: true });
+    expect(getMock.mock.calls[0][1].params).toEqual({
+      category: "draghi",
+      page: 1,
+      raw: 1,
+    });
+
+    await fetchBooks("draghi", { raw: false });
+    expect(getMock.mock.calls[1][1].params).not.toHaveProperty("raw");
+  });
+
   it("passa il testo così com'è: la codifica la fa axios", async () => {
     await fetchBooks("science fiction & caffè");
     expect(getMock.mock.calls[0][1].params.category).toBe("science fiction & caffè");
@@ -83,6 +95,11 @@ describe("fetchDescription", () => {
     await fetchDescription("/works/OL1W");
     expect(getMock.mock.calls[0][0]).toBe("/description");
     expect(getMock.mock.calls[0][1].params).toEqual({ key: "/works/OL1W" });
+  });
+
+  it("con raw chiede la trama originale", async () => {
+    await fetchDescription("/works/OL1W", { raw: true });
+    expect(getMock.mock.calls[0][1].params).toEqual({ key: "/works/OL1W", raw: 1 });
   });
 
   it("restituisce il contenuto della risposta", async () => {

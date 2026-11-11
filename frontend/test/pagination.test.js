@@ -55,6 +55,81 @@ describe("renderPagination", () => {
     expect(onGo).not.toHaveBeenCalled();
   });
 
+  it("le frecce sono separate dalla parola, che si può nascondere sugli schermi piccoli", () => {
+    renderPagination(container, { page: 2, totalPages: 3 }, vi.fn());
+    const [prev] = container.querySelectorAll(".page-step");
+    expect(prev.querySelector('[aria-hidden="true"]').textContent).toBe("◀");
+    expect(prev.querySelector(".page-step-label").textContent.trim()).toBe("Indietro");
+  });
+
+  it("compact mostra solo la pagina attuale tra la prima e l'ultima", () => {
+    renderPagination(container, { page: 5, totalPages: 10, compact: true }, vi.fn());
+    expect(labels()).toEqual(["◀ Indietro", "1", "…", "5", "…", "10", "Avanti ▶"]);
+  });
+
+  describe("loading", () => {
+    it("segna il contenitore come occupato e i pulsanti come non disponibili", () => {
+      renderPagination(container, { page: 2, totalPages: 3, loading: true }, vi.fn());
+      expect(container.getAttribute("aria-busy")).toBe("true");
+      const buttons = [...container.querySelectorAll("button")];
+      expect(buttons.every((b) => b.getAttribute("aria-disabled") === "true")).toBe(true);
+    });
+
+    it("ignora i click", () => {
+      const onGo = vi.fn();
+      renderPagination(container, { page: 2, totalPages: 3, loading: true }, onGo);
+      container.querySelector('[data-page="3"]').click();
+      expect(onGo).not.toHaveBeenCalled();
+    });
+
+    it("finito il caricamento i pulsanti tornano attivi", () => {
+      const onGo = vi.fn();
+      renderPagination(container, { page: 2, totalPages: 3, loading: true }, onGo);
+      renderPagination(container, { page: 2, totalPages: 3 }, onGo);
+
+      expect(container.hasAttribute("aria-busy")).toBe(false);
+      expect(container.querySelector("[aria-disabled]")).toBeNull();
+      container.querySelector('[data-page="3"]').click();
+      expect(onGo).toHaveBeenCalledWith(3);
+    });
+  });
+
+  describe("focus", () => {
+    const focusedLabel = () => document.activeElement.textContent;
+
+    it("ridisegnando, il focus torna sul pulsante equivalente", () => {
+      renderPagination(container, { page: 2, totalPages: 5 }, vi.fn());
+      container.querySelector('[data-action="next"]').focus();
+
+      renderPagination(container, { page: 3, totalPages: 5 }, vi.fn());
+      expect(focusedLabel()).toBe("Avanti ▶");
+    });
+
+    it("se il pulsante diventa disattivato, il focus va sulla pagina corrente", () => {
+      renderPagination(container, { page: 2, totalPages: 3 }, vi.fn());
+      container.querySelector('[data-action="next"]').focus();
+
+      renderPagination(container, { page: 3, totalPages: 3 }, vi.fn());
+      expect(focusedLabel()).toBe("3");
+    });
+
+    it("se il numero non c'è più, il focus va sulla pagina corrente", () => {
+      renderPagination(container, { page: 1, totalPages: 10 }, vi.fn());
+      container.querySelector('[data-page="2"]').focus();
+
+      renderPagination(container, { page: 10, totalPages: 10 }, vi.fn());
+      expect(focusedLabel()).toBe("10");
+    });
+
+    it("non ruba il focus se era altrove", () => {
+      document.body.insertAdjacentHTML("beforeend", "<input id='altro' />");
+      document.getElementById("altro").focus();
+
+      renderPagination(container, { page: 2, totalPages: 3 }, vi.fn());
+      expect(document.activeElement.id).toBe("altro");
+    });
+  });
+
   it("un nuovo disegno non accumula listener", () => {
     const first = vi.fn();
     const second = vi.fn();
